@@ -1,45 +1,72 @@
 package lda
 
 import (
+	//"errors"
 	"fmt"
 	"math"
 
 	"github.com/lda_api/internal/app/entity"
 	"github.com/lda_api/internal/app/repository"
 	"github.com/sirupsen/logrus"
+	//"gonum.org/v1/gonum/mat"
 )
 
+// TODO -> разобраться со структурой:
+//
+//	-> переписать методы, в которых использовалась ConversionData под ConvertDataContext
 type LDA struct {
 	db *repository.DataBase
 	//ConvAllData entity.ConversionData
-	Alpha float64   `json:"alpha"`
-	Beta  float64   `json:"beta"`
-	X     []float64 `json:"X"`
-	Y     []float64 `json:"Y"`
+	Alpha         float64   `json:"alpha"`
+	Beta          float64   `json:"beta"`
+	AccuracyModel float64   `json:"accuracy"`
+	ShiftingModel float64   `json:"shifting"`
+	X             []float64 `json:"x"`
+	Y             []float64 `json:"y"`
 }
 
 func New(db *repository.DataBase) *LDA {
 	return &LDA{
-		db: db,
+		Alpha: 0.0,
+		Beta:  0.0,
+		db:    db,
 	}
 }
 
-func (lda *LDA) ConvertData(dataUsers []entity.UserData) entity.ConversionData {
-	var dataConv entity.ConversionData
-	for i := 0; i < len(dataUsers); i++ {
-		diffCoef := (float64)(dataUsers[i].LoanAmount) / float64(dataUsers[i].IncomeAnnum)
-		diffCoef = (float64(dataUsers[i].IncomeAnnum) / diffCoef) / 1000
-		if dataUsers[i].SelfEmployed == " Yes" {
+func (lda *LDA) ConvertData(dataUsers entity.ContextData) entity.ConvertDataContext {
+	var dataContext entity.ConvertDataContext
+	for i := 0; i < len(dataUsers.Data); i++ {
+		diffCoef := (float64)(dataUsers.Data[i].LoanAmount) / float64(dataUsers.Data[i].IncomeAnnum)
+		diffCoef = (float64(dataUsers.Data[i].IncomeAnnum) / diffCoef) / 1000
+		if dataUsers.Data[i].SelfEmployed == " Yes" {
 			diffCoef = diffCoef * 0.25
 		} else {
 			diffCoef = diffCoef * 0.1
 		}
-		dataConv.ImportancecCoefficient = append(dataConv.ImportancecCoefficient, math.Round(diffCoef*100)/100)
-		dataConv.Rating = append(dataConv.Rating, float64(dataUsers[i].CibilScore))
+		var dataConv entity.ConversionData
+		dataConv.ImportancecCoefficient = diffCoef
+		dataConv.Rating = float64(dataUsers.Data[i].CibilScore)
+		if dataUsers.Data[i].LoanStatus == "Approved" {
+			dataConv.Class = 1
+		} else {
+			dataConv.Class = 0
+		}
+		dataContext.Data = append(dataContext.Data, dataConv)
+
 	}
-	return dataConv
+	return dataContext
 }
 
+func GetArray(data entity.ConvertDataContext) ([]float64, []float64, []float64) {
+	var dataRating, dataCoef, dataClass []float64
+
+	for i := 0; i < len(data.Data); i++ {
+		dataRating = append(dataRating, data.Data[i].Rating)
+		dataCoef = append(dataCoef, data.Data[i].ImportancecCoefficient)
+		dataClass = append(dataClass, float64(data.Data[i].Class))
+	}
+	return dataRating, dataCoef, dataClass
+}
 func GetMean(data []float64) float64 {
 	if data == nil {
 		return 0.0
@@ -66,7 +93,7 @@ func GetDispersion(data []float64, mean float64) float64 {
 
 func GetCovariation(dataX []float64, meanX float64, dataY []float64, meanY float64) float64 {
 	if dataX == nil && dataY == nil {
-		fmt.Println("Error")
+		logrus.Fatal("Data is Empty")
 		return 0.0
 	}
 	var sum float64 = 0.0
@@ -76,18 +103,17 @@ func GetCovariation(dataX []float64, meanX float64, dataY []float64, meanY float
 	return sum / (float64(len(dataY) - 1))
 }
 
-func GetCovariationMatrix(mean []float64, data entity.ConversionData) [][]float64 {
+func GetCovariationMatrix(mean []float64, dataCoef, dataRating []float64) [][]float64 {
 	var covariationMatrix [][]float64
-	covariation := GetCovariation(data.ImportancecCoefficient, mean[1], data.Rating, mean[0])
-	fmt.Println(covariation)
+	covariation := GetCovariation(dataCoef, mean[1], dataRating, mean[0])
 	for i := 0; i < len(mean); i++ {
 		var temp []float64
 		for j := 0; j < len(mean); j++ {
 			if i == j {
 				if i == 0 {
-					temp = append(temp, GetDispersion(data.Rating, mean[i]))
+					temp = append(temp, GetDispersion(dataRating, mean[i]))
 				} else {
-					temp = append(temp, GetDispersion(data.ImportancecCoefficient, mean[i]))
+					temp = append(temp, GetDispersion(dataCoef, mean[i]))
 				}
 			} else {
 				temp = append(temp, covariation)
@@ -162,8 +188,7 @@ func CheckUnitMatrix(inverseMatrix, W [][]float64) bool {
 			}
 		}
 	}
-	fmt.Println(result)
-	fmt.Println(count)
+
 	if count == (len(result) * len(result[0])) {
 		return true
 	} else {
@@ -173,7 +198,7 @@ func CheckUnitMatrix(inverseMatrix, W [][]float64) bool {
 
 func InverseMatrix(W [][]float64) [][]float64 {
 	var det float64 = GetDet(W)
-	fmt.Printf("det %f", det)
+
 	var updW [][]float64
 	for i := 1; i <= len(W); i += 1 {
 		var tempForAdd []float64
@@ -183,8 +208,7 @@ func InverseMatrix(W [][]float64) [][]float64 {
 		}
 		updW = append(updW, tempForAdd)
 	}
-	fmt.Println("updW is find")
-	fmt.Println(updW)
+
 	var result [][]float64
 	for i := 0; i < len(W); i++ {
 		var tempForAdd []float64
@@ -194,8 +218,7 @@ func InverseMatrix(W [][]float64) [][]float64 {
 		}
 		result = append(result, tempForAdd)
 	}
-	fmt.Print("result inverse")
-	fmt.Println(result)
+
 	if CheckUnitMatrix(result, W) {
 		return result
 	} else {
@@ -223,94 +246,233 @@ func GetB(covariationMatrixAllData, W [][]float64) [][]float64 {
 }
 
 func GetS(W, B [][]float64) [][]float64 {
-	fmt.Print("start W ")
-	fmt.Println(W)
 	W = InverseMatrix(W)
-	fmt.Println("W inverse is find")
-	fmt.Println(W)
 	return ProdMatrix(W, B)
 }
 
+func FindScale(a, b float64, dataCoef, dataRating []float64) ([]float64, float64, float64, float64) {
+
+	var score []float64 = nil
+
+	for score == nil { //|| GetDispersion(score, GetMean(score)) > 1.0{
+		for i := 0; i < len(dataCoef); i++ {
+			temp := a*dataCoef[i] + b*dataRating[i]
+			score = append(score, temp)
+		}
+		disp := GetDispersion(score, GetMean(score))
+		if disp > 1.1 {
+			a = a / math.Sqrt(disp)
+			b = b / math.Sqrt(disp)
+			score = nil
+		} else {
+			break
+		}
+	}
+	return score, GetMean(score), a, b
+
+}
+
+func (lda *LDA) PredictModel(dataUser entity.UserData) (string, float64) {
+	var context entity.ContextData
+	context.Data = append(context.Data, dataUser)
+	dataConvertion := lda.ConvertData(context)
+	score := lda.Alpha*dataConvertion.Data[0].ImportancecCoefficient + lda.Beta*dataConvertion.Data[0].Rating + lda.ShiftingModel
+	var predict string
+	if score > 0 {
+		logrus.Info("Дискриминационная оценка данного пользователя: ", score)
+		logrus.Info("Кредит будет успешно одобрен")
+		predict = "Approved"
+	} else {
+		logrus.Info("Дискриминационная оценка данного пользователя: ", score)
+		logrus.Info("Кредит будет отклонен")
+		predict = "Rejected"
+	}
+	return predict, score
+}
+
+func (lda *LDA) GetAccuracy(dataCoef, dataRating, classData []float64) {
+	countTryAnswer := 0.0
+	for i := 0; i < len(dataCoef); i++ {
+		score := lda.Alpha*dataCoef[i] + lda.Beta*dataRating[i] + lda.ShiftingModel
+		var predict int
+		if score > 0 {
+			predict = 1
+		} else {
+			predict = 0
+		}
+		if predict == int(classData[i]) {
+			countTryAnswer += 1
+		}
+	}
+	lda.AccuracyModel = (countTryAnswer / float64(len(classData))) * 100.0
+}
+
+func GetCombination(vectorsForCombination [][]float64) [][]float64 {
+	var resultComb [][]float64
+
+	for i := 0; i < len(vectorsForCombination); i++ {
+		for j := 0; j < len(vectorsForCombination[i]); j++ {
+			tempA := vectorsForCombination[i][j]
+			for k := 0; k < len(vectorsForCombination); k++ {
+				var comb []float64
+				for l := 0; l < len(vectorsForCombination[k]); l++ {
+					if k != i || l != j {
+						tempB := vectorsForCombination[k][l]
+						comb = append(comb, tempA)
+						comb = append(comb, tempB)
+					}
+				}
+				resultComb = append(resultComb, comb)
+			}
+		}
+	}
+	return resultComb
+}
+func (lda *LDA) FindProjection(meanClass []float64) float64 {
+	return lda.Alpha*meanClass[0] + lda.Beta*meanClass[1]
+}
 func (lda *LDA) FitModel() error {
 	// инициализация массивов средних значений для классов и всего набора данных
 	var meanValueFirstClass []float64
 	var meanValueSecondClass []float64
 	var meanValueAllData []float64
 	/// инициализация ковариационных матриц для классов и всего набора данных
-	var covariationMatrixAllData [][]float64
+	//var covariationMatrixAllData [][]float64
 	var covariationMatrixFirstClass [][]float64
 	var covariationMatrixSecondClass [][]float64
 	// инициализация ковариационных матриц S, W, B
-	var S [][]float64
+	//var S []float64
 	var W [][]float64
-	var B [][]float64
+	//var B [][]float64
 
+	// Получение данных для получения значения точности обученной модели
+	dataTestUsers, err := lda.db.Data().SelectTestData()
+	if err != nil {
+		return err
+	}
+	convDataTest := lda.ConvertData(dataTestUsers)
+	testDataRating, testDataImportancecCoefficient, testDataClass := GetArray(convDataTest)
 	// Получение всех необходимых значений для всего набора данных
-	dataAllUsers, err := lda.db.Data().SelectAllData()
+	dataAllUsers, err := lda.db.Data().SelectAllLearnData()
 	if err != nil {
 		return err
 	}
-	fmt.Println(dataAllUsers)
-	//convAllData := lda.ConvertData(dataAllUsers)
-	var convAllData entity.ConversionData
-	convAllData.ImportancecCoefficient = []float64{101, 89, 57, 76, 52, 49, 90, 72, 82, 88, 14, 33, 22, 20, 49, 36, 25, 29, 44, 42}
-	convAllData.Rating = []float64{87, 71, 66, 55, 61, 66, 89, 79, 77, 59, 24, 34, 26, 39, 49, 42, 21, 44, 32, 39}
-	meanValueAllData = append(meanValueAllData, GetMean(convAllData.Rating))
-	meanValueAllData = append(meanValueAllData, GetMean(convAllData.ImportancecCoefficient))
+	convAllData := lda.ConvertData(dataAllUsers)
+	allDataRating, allDataImportancecCoefficient, _ := GetArray(convAllData)
+	meanValueAllData = append(meanValueAllData, GetMean(allDataRating))
+	meanValueAllData = append(meanValueAllData, GetMean(allDataImportancecCoefficient))
 
-	covariationMatrixAllData = GetCovariationMatrix(meanValueAllData, convAllData)
-
-	fmt.Println(convAllData)
-	fmt.Println(meanValueAllData)
-	fmt.Println(covariationMatrixAllData)
-
+	/*covariationMatrixAllData = GetCovariationMatrix(
+		meanValueAllData,
+		allDataImportancecCoefficient,
+		allDataRating,
+	)
+	*/
 	// Получение данных для класса "Approved"
-	firstClass, err := lda.db.Data().SelectingDataByClass(" Approved")
+	firstClass, err := lda.db.Data().SelectingDataByClass("Approved")
 	if err != nil {
 		return err
 	}
-	fmt.Println(firstClass)
-	//dataFirstClass := lda.ConvertData(firstClass)
-	var dataFirstClass entity.ConversionData
-	dataFirstClass.ImportancecCoefficient = []float64{101, 89, 57, 76, 52, 49, 90, 72, 82, 88}
-	dataFirstClass.Rating = []float64{87, 71, 66, 55, 61, 66, 89, 79, 77, 59}
-	meanValueFirstClass = append(meanValueFirstClass, GetMean(dataFirstClass.Rating))
-	meanValueFirstClass = append(meanValueFirstClass, GetMean(dataFirstClass.ImportancecCoefficient))
+	dataFirstClass := lda.ConvertData(firstClass)
+	firstDataRating, firstDataImportancecCoefficient, _ := GetArray(dataFirstClass)
+	meanValueFirstClass = append(meanValueFirstClass, GetMean(firstDataRating))
+	meanValueFirstClass = append(meanValueFirstClass, GetMean(firstDataImportancecCoefficient))
 
-	covariationMatrixFirstClass = GetCovariationMatrix(meanValueFirstClass, dataFirstClass)
-
-	fmt.Print("Данные класса одобрено: ")
-	fmt.Println(dataFirstClass)
-	fmt.Println(meanValueFirstClass)
-	fmt.Println(covariationMatrixFirstClass)
+	covariationMatrixFirstClass = GetCovariationMatrix(
+		meanValueFirstClass,
+		firstDataImportancecCoefficient,
+		firstDataRating,
+	)
 
 	// Получение данных для класса "Rejected"
-	secondClass, err := lda.db.Data().SelectingDataByClass(" Rejected")
+	secondClass, err := lda.db.Data().SelectingDataByClass("Rejected")
 	if err != nil {
 		return err
 	}
-	fmt.Println(secondClass)
-	//dataSecondClass := lda.ConvertData(secondClass)
-	var dataSecondClass entity.ConversionData
-	dataSecondClass.ImportancecCoefficient = []float64{14, 33, 22, 20, 49, 36, 25, 29, 44, 42}
-	dataSecondClass.Rating = []float64{24, 34, 26, 39, 49, 42, 21, 44, 32, 39}
-	meanValueSecondClass = append(meanValueSecondClass, GetMean(dataSecondClass.Rating))
-	meanValueSecondClass = append(meanValueSecondClass, GetMean(dataSecondClass.ImportancecCoefficient))
+	dataSecondClass := lda.ConvertData(secondClass)
+	secondDataRating, secondDataImportancecCoefficient, _ := GetArray(dataSecondClass)
+	meanValueSecondClass = append(meanValueSecondClass, GetMean(secondDataRating))
+	meanValueSecondClass = append(meanValueSecondClass, GetMean(secondDataImportancecCoefficient))
 
-	covariationMatrixSecondClass = GetCovariationMatrix(meanValueSecondClass, dataSecondClass)
-
-	fmt.Print("Данные класса отклонено: ")
-	fmt.Println(dataSecondClass)
-	fmt.Println(meanValueSecondClass)
-	fmt.Println(covariationMatrixSecondClass)
+	covariationMatrixSecondClass = GetCovariationMatrix(
+		meanValueSecondClass,
+		secondDataImportancecCoefficient,
+		secondDataRating,
+	)
 
 	// Произведение расчетов для ковариационных матриц S, B, W
 
 	W = GetW(covariationMatrixFirstClass, covariationMatrixSecondClass)
-	fmt.Println("W is find")
-	B = GetB(covariationMatrixAllData, W)
-	fmt.Println("B is fund")
-	S = GetS(W, B)
-	fmt.Println(S)
+
+	//B = GetB(covariationMatrixAllData, W)
+	/*temp := GetS(W, B)
+	//конвертация данных под формат метода получения собственных значений и векторов
+	for i := 0; i < len(temp); i++ {
+		for j := 0; j < len(temp[i]); j++ {
+			S = append(S, temp[i][j])
+		}
+	}
+	//инициализация объекта для получения собственных значений и векторов
+	A := mat.NewDense(2, 2, S)
+	var eig mat.Eigen
+	if !eig.Factorize(A, mat.EigenRight) {
+		err := errors.New("error in calculating eigenvalues")
+		return err
+	}
+
+	// Получаем собственные значения
+	values := eig.Values(nil)
+	if values == nil {
+		err := errors.New("couldn't get eigenvalues")
+		return err
+	}
+
+	// Получаем собственные векторы
+	var vectors mat.CDense
+	eig.VectorsTo(&vectors)
+	var vectorsForCombination [][]float64
+	for i := 0; i < 2; i++ {
+		var temp []float64
+		for j := 0; j < 2; j++ {
+			temp = append(temp, float64(real(vectors.At(i, j))))
+		}
+		vectorsForCombination = append(vectorsForCombination, temp)
+	}
+	combination := GetCombination(vectorsForCombination)
+
+	for i := 0; i < len(combination); i++ {
+
+		tempAccuracy := 0.0
+		lda.Score,
+			lda.ConstDiscrimitation,
+			lda.Alpha,
+			lda.Beta = FindScale(combination[i][0], combination[i][1], allDataImportancecCoefficient, allDataRating)
+		if lda.Alpha != 0.0 && lda.Beta != 0.0 {
+			tempAccuracy = lda.GetAccuracy(testDataImportancecCoefficient, testDataRating, testDataClass)
+		}
+		if lda.AccuracyModel < tempAccuracy {
+			lda.AccuracyModel = tempAccuracy
+		}
+	}*/
+
+	W = InverseMatrix(W)
+	var differenceMean [][]float64
+
+	for i := 0; i < len(meanValueFirstClass); i++ {
+		tempValue := meanValueFirstClass[i] - meanValueSecondClass[i]
+		var tmp []float64
+		tmp = append(tmp, tempValue)
+		differenceMean = append(differenceMean, tmp)
+	}
+	omega := ProdMatrix(W, differenceMean)
+	fmt.Println(omega)
+	lda.Alpha = omega[0][0]
+	lda.Beta = omega[1][0]
+	lda.ShiftingModel = ((lda.FindProjection(meanValueFirstClass) + lda.FindProjection(meanValueSecondClass)) / 2.0) * -1
+	lda.GetAccuracy(testDataRating, testDataImportancecCoefficient, testDataClass)
+	logrus.Info("The model has been successfully trained.")
+	logrus.Info("Model accuracy: ", lda.AccuracyModel)
+	//logrus.Infof("Коэффициенты модели %f и %f", lda.Alpha, lda.Beta)
+
 	return nil
 }

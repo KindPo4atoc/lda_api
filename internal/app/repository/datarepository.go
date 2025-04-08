@@ -8,12 +8,15 @@ type DataForLearnRepository struct {
 	store *DataBase
 }
 
-func (r *DataForLearnRepository) SelectAllData() ([]entity.UserData, error) {
-	var users []entity.UserData
-	rows, err := r.store.db.Query("SELECT * FROM learndata limit 30;")
+func (r *DataForLearnRepository) SelectAllLearnData() (entity.ContextData, error) {
+	var users entity.ContextData
+	rows, err := r.store.db.Query(
+		"SELECT loan_id, self_employed, income_annum, loan_amount, cibil_score, loan_status " +
+			"FROM learndata where type_data = 0;",
+	)
 
 	if err != nil {
-		return nil, err
+		return entity.ContextData{}, err
 	}
 	defer rows.Close()
 
@@ -29,29 +32,25 @@ func (r *DataForLearnRepository) SelectAllData() ([]entity.UserData, error) {
 			&dataRow.LoanStatus,
 		)
 		if err != nil {
-			return nil, err
+			return entity.ContextData{}, err
 		}
-		if dataRow.LoanId == 29 {
-			dataRow.LoanId = 34
-			dataRow.SelfEmployed = " Yes"
-			dataRow.IncomeAnnum = 8400000
-			dataRow.LoanAmount = 22000000
-			dataRow.CibilScore = 830
-			dataRow.LoanStatus = " Approved"
-		}
-		users = append(users, dataRow)
+		users.Data = append(users.Data, dataRow)
 	}
 
 	return users, nil
 }
 
-func (r *DataForLearnRepository) SelectingDataByClass(classData string) ([]entity.UserData, error) {
-	var dataByClass []entity.UserData
+func (r *DataForLearnRepository) SelectingDataByClass(classData string) (entity.ContextData, error) {
+	var dataByClass entity.ContextData
 
-	rows, err := r.store.db.Query("SELECT * FROM learndata where loan_status = $1 limit 15;", classData)
+	rows, err := r.store.db.Query(
+		"SELECT loan_id, self_employed, income_annum, loan_amount, cibil_score, loan_status "+
+			"FROM learndata where loan_status = $1;",
+		classData,
+	)
 
 	if err != nil {
-		return nil, err
+		return entity.ContextData{}, err
 	}
 	defer rows.Close()
 
@@ -66,10 +65,41 @@ func (r *DataForLearnRepository) SelectingDataByClass(classData string) ([]entit
 			&dataRow.LoanStatus,
 		)
 		if err != nil {
-			return nil, err
+			return entity.ContextData{}, err
 		}
-		dataByClass = append(dataByClass, dataRow)
+		dataByClass.Data = append(dataByClass.Data, dataRow)
 	}
 
 	return dataByClass, nil
+}
+func (r *DataForLearnRepository) SelectTestData() (entity.ContextData, error) {
+	var users entity.ContextData
+	rows, err := r.store.db.Query(
+		"SELECT loan_id, self_employed, income_annum, loan_amount, cibil_score, loan_status " +
+			"FROM learndata where type_data = 1;",
+	)
+
+	if err != nil {
+		return entity.ContextData{}, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var dataRow entity.UserData
+
+		err := rows.Scan(
+			&dataRow.LoanId,
+			&dataRow.SelfEmployed,
+			&dataRow.IncomeAnnum,
+			&dataRow.LoanAmount,
+			&dataRow.CibilScore,
+			&dataRow.LoanStatus,
+		)
+		if err != nil {
+			return entity.ContextData{}, err
+		}
+		users.Data = append(users.Data, dataRow)
+	}
+
+	return users, nil
 }
