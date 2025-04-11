@@ -1,7 +1,7 @@
 package entity
 
 type ConvertDataContext struct {
-	Data []ConversionData `json:"convesion__data"`
+	Data []ConversionData `json:"convesion_data"`
 }
 
 func NewConvertContext(d []ConversionData) *ConvertDataContext {

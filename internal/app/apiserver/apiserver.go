@@ -8,6 +8,7 @@ import (
 	"github.com/lda_api/internal/app/entity"
 	"github.com/lda_api/internal/app/lda"
 	"github.com/lda_api/internal/app/repository"
+	"github.com/rs/cors"
 	logrus "github.com/sirupsen/logrus"
 )
 
@@ -40,8 +41,15 @@ func (s *APIServer) Start() error {
 	}
 
 	s.logger.Info("Starting api server")
-
-	return http.ListenAndServe(s.config.BindAddr, s.router)
+	c := cors.New(cors.Options{
+		AllowedOrigins:   []string{"http://127.0.0.1:5500"}, // Разрешенные домены
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE"},
+		AllowedHeaders:   []string{"Content-Type", "Authorization"},
+		AllowCredentials: true, // Разрешить куки и заголовки авторизации
+		Debug:            true, // Логирование (опционально)
+	})
+	handler := c.Handler(s.router)
+	return http.ListenAndServe(s.config.BindAddr, handler)
 }
 
 func (s *APIServer) configureLogger() error {
@@ -164,10 +172,29 @@ func (s *APIServer) handlePredictModel(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *APIServer) handleGetConvData(w http.ResponseWriter, r *http.Request) {
+	logrus.Info("Route /getConvData: GET request")
+	w.Header().Set("Content-type", "application/json")
+	data, err := s.db.Data().SelectAllLearnData()
+
+	if err != nil {
+		logrus.Fatal(err)
+	}
+	dataConv := s.model.ConvertData(data)
+	encoder := json.NewEncoder(w)
+	encoder.SetIndent("", " ")
+	err = encoder.Encode(dataConv)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
 func (s *APIServer) configureRouter() {
+
 	s.router.HandleFunc("/selectLearnData", s.handleSelectLearnData).Methods("GET")
 	s.router.HandleFunc("/selectTestData", s.handleSelectTestData).Methods("GET")
+	s.router.HandleFunc("/getConvData", s.handleGetConvData).Methods("GET")
 	s.router.HandleFunc("/selectClassData/{item}", s.handleSelectClassData).Methods("GET")
 	s.router.HandleFunc("/initModel", s.handleInitModel).Methods("GET")
 	s.router.HandleFunc("/predict", s.handlePredictModel).Methods("POST")
+
 }

@@ -272,13 +272,13 @@ func FindScale(a, b float64, dataCoef, dataRating []float64) ([]float64, float64
 
 }
 
-func (lda *LDA) PredictModel(dataUser entity.UserData) (string, float64) {
+func (lda *LDA) PredictModel(dataUser entity.UserData) (string, float64, entity.ConversionData) {
 	var context entity.ContextData
 	context.Data = append(context.Data, dataUser)
 	dataConvertion := lda.ConvertData(context)
-	score := lda.Alpha*dataConvertion.Data[0].ImportancecCoefficient + lda.Beta*dataConvertion.Data[0].Rating + lda.ShiftingModel
+	score := lda.Alpha*dataConvertion.Data[0].ImportancecCoefficient + lda.Beta*dataConvertion.Data[0].Rating
 	var predict string
-	if score > 0 {
+	if score > lda.ShiftingModel {
 		logrus.Info("Дискриминационная оценка данного пользователя: ", score)
 		logrus.Info("Кредит будет успешно одобрен")
 		predict = "Approved"
@@ -287,15 +287,15 @@ func (lda *LDA) PredictModel(dataUser entity.UserData) (string, float64) {
 		logrus.Info("Кредит будет отклонен")
 		predict = "Rejected"
 	}
-	return predict, score
+	return predict, score, dataConvertion.Data[0]
 }
 
 func (lda *LDA) GetAccuracy(dataCoef, dataRating, classData []float64) {
 	countTryAnswer := 0.0
 	for i := 0; i < len(dataCoef); i++ {
-		score := lda.Alpha*dataCoef[i] + lda.Beta*dataRating[i] + lda.ShiftingModel
+		score := lda.Alpha*dataCoef[i] + lda.Beta*dataRating[i]
 		var predict int
-		if score > 0 {
+		if score > lda.ShiftingModel {
 			predict = 1
 		} else {
 			predict = 0
@@ -330,6 +330,18 @@ func GetCombination(vectorsForCombination [][]float64) [][]float64 {
 }
 func (lda *LDA) FindProjection(meanClass []float64) float64 {
 	return lda.Alpha*meanClass[0] + lda.Beta*meanClass[1]
+}
+
+func (lda *LDA) FindXY() error {
+	temp := ((lda.Beta/lda.Alpha)*0 + (-lda.ShiftingModel / lda.Alpha))
+	lda.X = append(lda.X, 0)
+	lda.Y = append(lda.Y, temp)
+
+	temp = ((lda.Beta/lda.Alpha)*500 + (-lda.ShiftingModel / lda.Alpha))
+	lda.X = append(lda.X, 500)
+	lda.Y = append(lda.Y, temp)
+
+	return nil
 }
 func (lda *LDA) FitModel() error {
 	// инициализация массивов средних значений для классов и всего набора данных
@@ -473,6 +485,6 @@ func (lda *LDA) FitModel() error {
 	logrus.Info("The model has been successfully trained.")
 	logrus.Info("Model accuracy: ", lda.AccuracyModel)
 	//logrus.Infof("Коэффициенты модели %f и %f", lda.Alpha, lda.Beta)
-
+	lda.FindXY()
 	return nil
 }
