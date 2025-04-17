@@ -4,6 +4,7 @@ import (
 	"github.com/lda_api/internal/app/entity"
 )
 
+// структура для взаимодействия с бд
 type DataForLearnRepository struct {
 	store *DataBase
 }
@@ -11,7 +12,7 @@ type DataForLearnRepository struct {
 func (r *DataForLearnRepository) SelectAllLearnData() (entity.ContextData, error) {
 	var users entity.ContextData
 	rows, err := r.store.db.Query(
-		"SELECT loan_id, self_employed, income_annum, loan_amount, cibil_score, loan_status " +
+		"SELECT loan_id, loan_term, income_annum, loan_amount, cibil_score, loan_status " +
 			"FROM learndata where type_data = 0;",
 	)
 
@@ -25,7 +26,7 @@ func (r *DataForLearnRepository) SelectAllLearnData() (entity.ContextData, error
 
 		err := rows.Scan(
 			&dataRow.LoanId,
-			&dataRow.SelfEmployed,
+			&dataRow.LoanTerm,
 			&dataRow.IncomeAnnum,
 			&dataRow.LoanAmount,
 			&dataRow.CibilScore,
@@ -58,7 +59,7 @@ func (r *DataForLearnRepository) SelectingDataByClass(classData string) (entity.
 		var dataRow entity.UserData
 		err := rows.Scan(
 			&dataRow.LoanId,
-			&dataRow.SelfEmployed,
+			&dataRow.LoanTerm,
 			&dataRow.IncomeAnnum,
 			&dataRow.LoanAmount,
 			&dataRow.CibilScore,
@@ -75,7 +76,7 @@ func (r *DataForLearnRepository) SelectingDataByClass(classData string) (entity.
 func (r *DataForLearnRepository) SelectTestData() (entity.ContextData, error) {
 	var users entity.ContextData
 	rows, err := r.store.db.Query(
-		"SELECT loan_id, self_employed, income_annum, loan_amount, cibil_score, loan_status " +
+		"SELECT loan_id, loan_term, income_annum, loan_amount, cibil_score, loan_status " +
 			"FROM learndata where type_data = 1;",
 	)
 
@@ -89,7 +90,7 @@ func (r *DataForLearnRepository) SelectTestData() (entity.ContextData, error) {
 
 		err := rows.Scan(
 			&dataRow.LoanId,
-			&dataRow.SelfEmployed,
+			&dataRow.LoanTerm,
 			&dataRow.IncomeAnnum,
 			&dataRow.LoanAmount,
 			&dataRow.CibilScore,
