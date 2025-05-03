@@ -105,7 +105,7 @@ func (s *APIServer) handleSelectLearnData(w http.ResponseWriter, r *http.Request
 }
 
 // ручка на получение параметров модели по маршруту -> /initModel
-func (s *APIServer) handleInitModel(w http.ResponseWriter, r *http.Request) {
+func (s *APIServer) handleGetParamModel(w http.ResponseWriter, r *http.Request) {
 
 	logrus.Info("Route /initModel: GET request")
 	w.Header().Set("Content-type", "application/json")
@@ -143,25 +143,11 @@ func (s *APIServer) handlePredictModel(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// ручка на поулчение трансформированных в пространство lda данных маршрут -> /getConvData
-func (s *APIServer) handleGetConvData(w http.ResponseWriter, r *http.Request) {
-	logrus.Info("Route /getConvData: GET request")
-	w.Header().Set("Content-type", "application/json")
-
-	encoder := json.NewEncoder(w)
-	encoder.SetIndent("", " ")
-	err := encoder.Encode(s.model)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-}
-
 // инициализация роутера
 func (s *APIServer) configureRouter() {
 
 	s.router.HandleFunc("/selectLearnData", s.handleSelectLearnData).Methods("GET")
-	s.router.HandleFunc("/getConvData", s.handleGetConvData).Methods("GET")
-	s.router.HandleFunc("/initModel", s.handleInitModel).Methods("GET")
+	s.router.HandleFunc("/getParamModel", s.handleGetParamModel).Methods("GET")
 	s.router.HandleFunc("/predict", s.handlePredictModel).Methods("POST")
 
 }
