@@ -60,7 +60,7 @@ func GetCovariation(dataX []float64, meanX float64, dataY []float64, meanY float
 // метод для получения ковариационной матрицы
 func GetCovariationMatrix(mean []float64, dataCoef, dataRating []float64) [][]float64 {
 	var covariationMatrix [][]float64
-	covariation := GetCovariation(dataCoef, mean[1], dataRating, mean[0])
+	covariation := GetCovariation(dataCoef, mean[1], dataRating, mean[0]) //проверить зависимость коэф
 	for i := 0; i < len(mean); i++ {
 		var temp []float64
 		for j := 0; j < len(mean); j++ {
@@ -129,7 +129,7 @@ func Unique(class []int) []int {
 			}
 		}
 		if !check {
-			result = append(result, temp)
+			result = append([]int{temp}, result...)
 		}
 	}
 	return result
@@ -419,16 +419,16 @@ func (lda *LDA) Predict(data [][]float64) (int, [][]float64, [][]float64, error)
 	}
 	distanceT := T(distance)
 
-	max := -math.MaxFloat64
-	indxMax := -1
+	min := math.MaxFloat64
+	indxMin := -1
 	for i := 0; i < len(distanceT[0]); i++ {
-		if max < distanceT[0][i] {
-			max = distanceT[0][i]
-			indxMax = i
+		if min > distanceT[0][i] {
+			min = distanceT[0][i]
+			indxMin = i
 		}
 	}
 
-	return indxMax, distance, ldaData, nil
+	return indxMin, distance, ldaData, nil
 }
 
 // метод для получения точности модели
@@ -441,13 +441,30 @@ func (lda *LDA) GetAccuracyModel(data [][]float64, y []int) error {
 		if err != nil {
 			return err
 		}
+		//fmt.Println("distance: ", d)
+		//fmt.Printf("predict - %d ----- class - %d\n", predict, y[i])
 		if predict == y[i] {
 			count += 1
 		}
 	}
-	fmt.Println(count)
 	lda.AccuracyModel = (count / float64(len(data))) * 100.0
 	return nil
+}
+func (lda *LDA) GetStringCoef() string {
+	resultStr := ""
+	for i := 0; i < len(lda.LinearDisc); i++ {
+		for j := 0; j < len(lda.LinearDisc[i]); j++ {
+			if j == 0 {
+				resultStr += "| " + fmt.Sprint(lda.LinearDisc[i][j]) + "\t"
+			}
+			if j == len(lda.LinearDisc[i])-1 {
+				resultStr += fmt.Sprint(lda.LinearDisc[i][j]) + " |\n"
+			} else {
+				resultStr += fmt.Sprint(lda.LinearDisc[i][j]) + "\t"
+			}
+		}
+	}
+	return resultStr
 }
 
 // главный метод для обучения модели
@@ -464,6 +481,7 @@ func (lda *LDA) FitModel() error {
 	nClasses := len(classLabel)
 
 	meanAllData := GetMeans(data)
+	fmt.Println("classlabel")
 	fmt.Println(classLabel)
 	fmt.Println(nFeatures)
 	fmt.Println(nClasses)
@@ -568,7 +586,7 @@ func (lda *LDA) FitModel() error {
 	convLdaDataT := T(convLdaData)
 	ldaMeanVal := GetMeans(convLdaData)
 	covariationLdaMatrix := GetCovariationMatrix(ldaMeanVal, convLdaDataT[1], convLdaDataT[0])
-
+	fmt.Println(lda.LinearDisc)
 	lda.CovInvMatrix, err = inverseMatrix(covariationLdaMatrix)
 	if err != nil {
 		return err
@@ -579,6 +597,10 @@ func (lda *LDA) FitModel() error {
 	}
 	dataTest, yTest := initData(test)
 	err = lda.GetAccuracyModel(dataTest, yTest)
+	logrus.Info("------Параметры модели------")
+	logrus.Info("Точность модели ", lda.AccuracyModel)
+	logrus.Info("Коэффициенты модели:")
+	fmt.Println(lda.GetStringCoef())
 	if err != nil {
 		return err
 	}
