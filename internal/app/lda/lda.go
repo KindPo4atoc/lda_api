@@ -111,8 +111,6 @@ func initData(data entity.ContextData) ([][]float64, []int) {
 			class[i] = 0
 		}
 	}
-	fmt.Println(len(dataForLearn))
-	fmt.Println(len(class))
 	return dataForLearn, class
 }
 
@@ -325,7 +323,6 @@ func SortDesc(values []float64) ([]float64, []int) {
 			}
 		}
 		lastValue = values[len(values)-1-i]
-		fmt.Println(lastValue)
 		for j := 0; j < len(copyArr); j++ {
 			if lastValue == copyArr[j] {
 				idxs = append([]int{j}, idxs...)
@@ -475,17 +472,10 @@ func (lda *LDA) FitModel() error {
 	}
 	data, class := initData(dataContext)
 	lda.Classes = class
-	nFeatures := len(data[0])
 	n_components := 2
 	classLabel := Unique(class)
-	nClasses := len(classLabel)
 
 	meanAllData := GetMeans(data)
-	fmt.Println("classlabel")
-	fmt.Println(classLabel)
-	fmt.Println(nFeatures)
-	fmt.Println(nClasses)
-	fmt.Println(meanAllData)
 
 	var S_W [][]float64
 	var S_B [][]float64
@@ -586,7 +576,6 @@ func (lda *LDA) FitModel() error {
 	convLdaDataT := T(convLdaData)
 	ldaMeanVal := GetMeans(convLdaData)
 	covariationLdaMatrix := GetCovariationMatrix(ldaMeanVal, convLdaDataT[1], convLdaDataT[0])
-	fmt.Println(lda.LinearDisc)
 	lda.CovInvMatrix, err = inverseMatrix(covariationLdaMatrix)
 	if err != nil {
 		return err
@@ -599,8 +588,6 @@ func (lda *LDA) FitModel() error {
 	err = lda.GetAccuracyModel(dataTest, yTest)
 	logrus.Info("------Параметры модели------")
 	logrus.Info("Точность модели ", lda.AccuracyModel)
-	logrus.Info("Коэффициенты модели:")
-	fmt.Println(lda.GetStringCoef())
 	if err != nil {
 		return err
 	}

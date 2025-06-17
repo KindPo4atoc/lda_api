@@ -36,14 +36,13 @@ func (s *APIServer) Start() error {
 	if err := s.configureLogger(); err != nil {
 		return err
 	}
-
+	s.logger.Info("Начало конфигурации маршрутизатора.")
 	s.configureRouter()
-
+	s.logger.Info("Начало конфигурация базы данных.")
 	if err := s.configureDB(); err != nil {
-		return nil
+		return err
 	}
 
-	s.logger.Info("Starting api server")
 	c := cors.New(cors.Options{
 		AllowedOrigins:   []string{"http://127.0.0.1:5500"}, // Разрешенные домены
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE"},
@@ -51,11 +50,14 @@ func (s *APIServer) Start() error {
 		AllowCredentials: true, // Разрешить куки и заголовки авторизации
 		Debug:            true, // Логирование (опционально)
 	})
+	s.logger.Info("Конфигурация политики CORS завершена.")
 	s.model = lda.New(s.db)
+	s.logger.Info("Начало инициализация модели.")
 	if err := s.model.FitModel(); err != nil {
-		logrus.Fatal(err)
+		return err
 	}
 	handler := c.Handler(s.router)
+	s.logger.Info("API сервер запущен.")
 	return http.ListenAndServe(s.config.BindAddr, handler)
 }
 
@@ -81,13 +83,13 @@ func (s *APIServer) configureDB() error {
 
 	s.db = database
 	s.db.Data()
-
+	s.logger.Info("Конфигурация базы данных завершена.")
 	return nil
 }
 
 // ручка на получение обучающих данных по маршруту -> /selectLearnData
 func (s *APIServer) handleSelectLearnData(w http.ResponseWriter, r *http.Request) {
-	logrus.Info("Route /selectLearnData: GET request")
+	logrus.Info("Использован GET-запрос по маршруту http://localhost:8000/selectLearnData")
 	w.Header().Set("Content-type", "application/json")
 	data, err := s.db.Data().SelectAllLearnData()
 
@@ -106,8 +108,7 @@ func (s *APIServer) handleSelectLearnData(w http.ResponseWriter, r *http.Request
 
 // ручка на получение параметров модели по маршруту -> /initModel
 func (s *APIServer) handleGetParamModel(w http.ResponseWriter, r *http.Request) {
-
-	logrus.Info("Route /initModel: GET request")
+	logrus.Info("Использован GET-запрос по маршруту http://localhost:8000/getParamModel")
 	w.Header().Set("Content-type", "application/json")
 	encoder := json.NewEncoder(w)
 	encoder.SetIndent("", " ")
@@ -119,7 +120,7 @@ func (s *APIServer) handleGetParamModel(w http.ResponseWriter, r *http.Request) 
 
 // ручка на получение предикта post запрос, тело должно содержать userData, маршрут -> /predict
 func (s *APIServer) handlePredictModel(w http.ResponseWriter, r *http.Request) {
-	logrus.Info("Route /predict: POST request")
+	logrus.Info("Использован POST-запрос по маршруту http://localhost:8000/predict")
 	var dataForPredict entity.UserData
 	json.NewDecoder(r.Body).Decode(&dataForPredict)
 	var tmp []float64
@@ -149,5 +150,5 @@ func (s *APIServer) configureRouter() {
 	s.router.HandleFunc("/selectLearnData", s.handleSelectLearnData).Methods("GET")
 	s.router.HandleFunc("/getParamModel", s.handleGetParamModel).Methods("GET")
 	s.router.HandleFunc("/predict", s.handlePredictModel).Methods("POST")
-
+	s.logger.Info("Конфигурация маршрутизатора завершена.")
 }
